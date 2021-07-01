@@ -53,7 +53,7 @@ impl Map<String, Value> {
     /// Clears the map, removing all values.
     #[inline]
     pub fn clear(&mut self) {
-        self.map.clear()
+        self.map.clear();
     }
 
     /// Returns a reference to the value corresponding to the key.
@@ -541,6 +541,40 @@ impl<'a> Entry<'a> {
         match self {
             Entry::Vacant(entry) => entry.insert(default()),
             Entry::Occupied(entry) => entry.into_mut(),
+        }
+    }
+
+    /// Provides in-place mutable access to an occupied entry before any
+    /// potential inserts into the map.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use serde_json::json;
+    /// #
+    /// let mut map = serde_json::Map::new();
+    /// map.entry("serde")
+    ///     .and_modify(|e| *e = json!("rust"))
+    ///     .or_insert(json!("cpp"));
+    ///
+    /// assert_eq!(map["serde"], "cpp");
+    ///
+    /// map.entry("serde")
+    ///     .and_modify(|e| *e = json!("rust"))
+    ///     .or_insert(json!("cpp"));
+    ///
+    /// assert_eq!(map["serde"], "rust");
+    /// ```
+    pub fn and_modify<F>(self, f: F) -> Self
+    where
+        F: FnOnce(&mut Value),
+    {
+        match self {
+            Entry::Occupied(mut entry) => {
+                f(entry.get_mut());
+                Entry::Occupied(entry)
+            }
+            Entry::Vacant(entry) => Entry::Vacant(entry),
         }
     }
 }

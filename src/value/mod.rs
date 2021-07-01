@@ -108,7 +108,7 @@ pub use crate::raw::{to_raw_value, RawValue};
 
 /// Represents any valid JSON value.
 ///
-/// See the `serde_json::value` module documentation for usage examples.
+/// See the [`serde_json::value` module documentation](self) for usage examples.
 #[derive(Clone, Eq, PartialEq)]
 pub enum Value {
     /// Represents a JSON null value.
@@ -193,27 +193,6 @@ impl Debug for Value {
     }
 }
 
-struct WriterFormatter<'a, 'b: 'a> {
-    inner: &'a mut fmt::Formatter<'b>,
-}
-
-impl<'a, 'b> io::Write for WriterFormatter<'a, 'b> {
-    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        fn io_error<E>(_: E) -> io::Error {
-            // Error value does not matter because fmt::Display impl below just
-            // maps it to fmt::Error
-            io::Error::new(io::ErrorKind::Other, "fmt error")
-        }
-        let s = tri!(str::from_utf8(buf).map_err(io_error));
-        tri!(self.inner.write_str(s).map_err(io_error));
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
-
 impl fmt::Display for Value {
     /// Display a JSON value as a string.
     ///
@@ -240,6 +219,30 @@ impl fmt::Display for Value {
     ///     "{\n  \"city\": \"London\",\n  \"street\": \"10 Downing Street\"\n}");
     /// ```
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        struct WriterFormatter<'a, 'b: 'a> {
+            inner: &'a mut fmt::Formatter<'b>,
+        }
+
+        impl<'a, 'b> io::Write for WriterFormatter<'a, 'b> {
+            fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+                // Safety: the serializer below only emits valid utf8 when using
+                // the default formatter.
+                let s = unsafe { str::from_utf8_unchecked(buf) };
+                tri!(self.inner.write_str(s).map_err(io_error));
+                Ok(buf.len())
+            }
+
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+
+        fn io_error(_: fmt::Error) -> io::Error {
+            // Error value does not matter because Display impl just maps it
+            // back to fmt::Error.
+            io::Error::new(io::ErrorKind::Other, "fmt error")
+        }
+
         let alternate = f.alternate();
         let mut wr = WriterFormatter { inner: f };
         if alternate {
@@ -757,25 +760,15 @@ impl Value {
         if !pointer.starts_with('/') {
             return None;
         }
-        let tokens = pointer
+        pointer
             .split('/')
             .skip(1)
-            .map(|x| x.replace("~1", "/").replace("~0", "~"));
-        let mut target = self;
-
-        for token in tokens {
-            let target_opt = match *target {
-                Value::Object(ref map) => map.get(&token),
-                Value::Array(ref list) => parse_index(&token).and_then(|x| list.get(x)),
-                _ => return None,
-            };
-            if let Some(t) = target_opt {
-                target = t;
-            } else {
-                return None;
-            }
-        }
-        Some(target)
+            .map(|x| x.replace("~1", "/").replace("~0", "~"))
+            .try_fold(self, |target, token| match target {
+                Value::Object(map) => map.get(&token),
+                Value::Array(list) => parse_index(&token).and_then(|x| list.get(x)),
+                _ => None,
+            })
     }
 
     /// Looks up a value by a JSON Pointer and returns a mutable reference to
@@ -822,30 +815,15 @@ impl Value {
         if !pointer.starts_with('/') {
             return None;
         }
-        let tokens = pointer
+        pointer
             .split('/')
             .skip(1)
-            .map(|x| x.replace("~1", "/").replace("~0", "~"));
-        let mut target = self;
-
-        for token in tokens {
-            // borrow checker gets confused about `target` being mutably borrowed too many times because of the loop
-            // this once-per-loop binding makes the scope clearer and circumvents the error
-            let target_once = target;
-            let target_opt = match *target_once {
-                Value::Object(ref mut map) => map.get_mut(&token),
-                Value::Array(ref mut list) => {
-                    parse_index(&token).and_then(move |x| list.get_mut(x))
-                }
-                _ => return None,
-            };
-            if let Some(t) = target_opt {
-                target = t;
-            } else {
-                return None;
-            }
-        }
-        Some(target)
+            .map(|x| x.replace("~1", "/").replace("~0", "~"))
+            .try_fold(self, |target, token| match target {
+                Value::Object(map) => map.get_mut(&token),
+                Value::Array(list) => parse_index(&token).and_then(move |x| list.get_mut(x)),
+                _ => None,
+            })
     }
 
     /// Takes the value out of the `Value`, leaving a `Null` in its place.

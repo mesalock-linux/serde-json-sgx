@@ -318,11 +318,11 @@ where
 
     #[inline]
     fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq> {
+        tri!(self
+            .formatter
+            .begin_array(&mut self.writer)
+            .map_err(Error::io));
         if len == Some(0) {
-            tri!(self
-                .formatter
-                .begin_array(&mut self.writer)
-                .map_err(Error::io));
             tri!(self
                 .formatter
                 .end_array(&mut self.writer)
@@ -332,10 +332,6 @@ where
                 state: State::Empty,
             })
         } else {
-            tri!(self
-                .formatter
-                .begin_array(&mut self.writer)
-                .map_err(Error::io));
             Ok(Compound::Map {
                 ser: self,
                 state: State::First,
@@ -387,11 +383,11 @@ where
 
     #[inline]
     fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap> {
+        tri!(self
+            .formatter
+            .begin_object(&mut self.writer)
+            .map_err(Error::io));
         if len == Some(0) {
-            tri!(self
-                .formatter
-                .begin_object(&mut self.writer)
-                .map_err(Error::io));
             tri!(self
                 .formatter
                 .end_object(&mut self.writer)
@@ -401,10 +397,6 @@ where
                 state: State::Empty,
             })
         } else {
-            tri!(self
-                .formatter
-                .begin_object(&mut self.writer)
-                .map_err(Error::io));
             Ok(Compound::Map {
                 ser: self,
                 state: State::First,

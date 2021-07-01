@@ -298,9 +298,9 @@
 //! [to_vec]: https://docs.serde.rs/serde_json/ser/fn.to_vec.html
 //! [to_writer]: https://docs.serde.rs/serde_json/ser/fn.to_writer.html
 //! [macro]: https://docs.serde.rs/serde_json/macro.json.html
-//! [`serde-json-core`]: https://japaric.github.io/serde-json-core/serde_json_core/
+//! [`serde-json-core`]: https://github.com/rust-embedded-community/serde-json-core
 
-#![doc(html_root_url = "https://docs.rs/serde_json/1.0.60")]
+#![doc(html_root_url = "https://docs.rs/serde_json/1.0.64")]
 #![deny(clippy::all, clippy::pedantic)]
 // Ignored clippy lints
 #![allow(
@@ -339,6 +339,7 @@
     // things are often more readable this way
     clippy::cast_lossless,
     clippy::module_name_repetitions,
+    clippy::redundant_else,
     clippy::shadow_unrelated,
     clippy::single_match_else,
     clippy::too_many_lines,
