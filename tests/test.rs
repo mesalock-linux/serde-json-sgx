@@ -1,8 +1,16 @@
 #![cfg(not(feature = "preserve_order"))]
 #![allow(
+    clippy::cast_precision_loss,
     clippy::excessive_precision,
     clippy::float_cmp,
-    clippy::unreadable_literal
+    clippy::items_after_statements,
+    clippy::let_underscore_drop,
+    clippy::shadow_unrelated,
+    clippy::too_many_lines,
+    clippy::unreadable_literal,
+    clippy::unseparated_literal_suffix,
+    clippy::vec_init_then_push,
+    clippy::zero_sized_map_values
 )]
 #![cfg_attr(feature = "trace-macros", feature(trace_macros))]
 #[cfg(feature = "trace-macros")]
@@ -805,6 +813,7 @@ fn test_parse_u64() {
 #[test]
 fn test_parse_negative_zero() {
     for negative_zero in &[
+        "-0",
         "-0.0",
         "-0e2",
         "-0.0e2",
@@ -812,9 +821,14 @@ fn test_parse_negative_zero() {
         "-1e-4000000000000000000000000000000000000000000000000",
     ] {
         assert!(
+            from_str::<f32>(negative_zero).unwrap().is_sign_negative(),
+            "should have been negative: {:?}",
+            negative_zero,
+        );
+        assert!(
             from_str::<f64>(negative_zero).unwrap().is_sign_negative(),
             "should have been negative: {:?}",
-            negative_zero
+            negative_zero,
         );
     }
 }
@@ -1007,8 +1021,14 @@ fn test_parse_number() {
     #[cfg(feature = "arbitrary_precision")]
     test_parse_ok(vec![
         ("1e999", Number::from_string_unchecked("1e999".to_owned())),
+        ("1e+999", Number::from_string_unchecked("1e+999".to_owned())),
         ("-1e999", Number::from_string_unchecked("-1e999".to_owned())),
         ("1e-999", Number::from_string_unchecked("1e-999".to_owned())),
+        ("1E999", Number::from_string_unchecked("1E999".to_owned())),
+        ("1E+999", Number::from_string_unchecked("1E+999".to_owned())),
+        ("-1E999", Number::from_string_unchecked("-1E999".to_owned())),
+        ("1E-999", Number::from_string_unchecked("1E-999".to_owned())),
+        ("1E+000", Number::from_string_unchecked("1E+000".to_owned())),
         (
             "2.3e999",
             Number::from_string_unchecked("2.3e999".to_owned()),
@@ -1806,7 +1826,7 @@ fn test_stack_overflow() {
         .collect();
     let _: Value = from_str(&brackets).unwrap();
 
-    let brackets: String = iter::repeat('[').take(129).collect();
+    let brackets = "[".repeat(129);
     test_parse_err::<Value>(&[(&brackets, "recursion limit exceeded at line 1 column 128")]);
 }
 
@@ -2130,7 +2150,7 @@ fn test_borrowed_raw_value() {
         #[serde(borrow)]
         b: &'a RawValue,
         c: i8,
-    };
+    }
 
     let wrapper_from_str: Wrapper =
         serde_json::from_str(r#"{"a": 1, "b": {"foo": 2}, "c": 3}"#).unwrap();
@@ -2163,7 +2183,7 @@ fn test_boxed_raw_value() {
         a: i8,
         b: Box<RawValue>,
         c: i8,
-    };
+    }
 
     let wrapper_from_str: Wrapper =
         serde_json::from_str(r#"{"a": 1, "b": {"foo": 2}, "c": 3}"#).unwrap();
@@ -2201,10 +2221,30 @@ fn test_boxed_raw_value() {
     assert_eq!(r#"["a",42,{"foo": "bar"},null]"#, array_to_string);
 }
 
+#[cfg(feature = "raw_value")]
+#[test]
+fn test_raw_invalid_utf8() {
+    use serde_json::value::RawValue;
+
+    let j = &[b'"', b'\xCE', b'\xF8', b'"'];
+    let value_err = serde_json::from_slice::<Value>(j).unwrap_err();
+    let raw_value_err = serde_json::from_slice::<Box<RawValue>>(j).unwrap_err();
+
+    assert_eq!(
+        value_err.to_string(),
+        "invalid unicode code point at line 1 column 4",
+    );
+    assert_eq!(
+        raw_value_err.to_string(),
+        "invalid unicode code point at line 1 column 4",
+    );
+}
+
 #[test]
 fn test_borrow_in_map_key() {
     #[derive(Deserialize, Debug)]
     struct Outer {
+        #[allow(dead_code)]
         map: BTreeMap<MyMapKey, ()>,
     }
 

@@ -513,7 +513,11 @@ impl<'de> VariantAccess<'de> for VariantDeserializer {
     {
         match self.value {
             Some(Value::Array(v)) => {
-                serde::Deserializer::deserialize_any(SeqDeserializer::new(v), visitor)
+                if v.is_empty() {
+                    visitor.visit_unit()
+                } else {
+                    visit_array(v, visitor)
+                }
             }
             Some(other) => Err(serde::de::Error::invalid_type(
                 other.unexpected(),
@@ -535,9 +539,7 @@ impl<'de> VariantAccess<'de> for VariantDeserializer {
         V: Visitor<'de>,
     {
         match self.value {
-            Some(Value::Object(v)) => {
-                serde::Deserializer::deserialize_any(MapDeserializer::new(v), visitor)
-            }
+            Some(Value::Object(v)) => visit_object(v, visitor),
             Some(other) => Err(serde::de::Error::invalid_type(
                 other.unexpected(),
                 &"struct variant",
@@ -559,38 +561,6 @@ impl SeqDeserializer {
         SeqDeserializer {
             iter: vec.into_iter(),
         }
-    }
-}
-
-impl<'de> serde::Deserializer<'de> for SeqDeserializer {
-    type Error = Error;
-
-    #[inline]
-    fn deserialize_any<V>(mut self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        let len = self.iter.len();
-        if len == 0 {
-            visitor.visit_unit()
-        } else {
-            let ret = tri!(visitor.visit_seq(&mut self));
-            let remaining = self.iter.len();
-            if remaining == 0 {
-                Ok(ret)
-            } else {
-                Err(serde::de::Error::invalid_length(
-                    len,
-                    &"fewer elements in array",
-                ))
-            }
-        }
-    }
-
-    forward_to_deserialize_any! {
-        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
-        bytes byte_buf option unit unit_struct newtype_struct seq tuple
-        tuple_struct map struct enum identifier ignored_any
     }
 }
 
@@ -663,24 +633,6 @@ impl<'de> MapAccess<'de> for MapDeserializer {
             (lower, Some(upper)) if lower == upper => Some(upper),
             _ => None,
         }
-    }
-}
-
-impl<'de> serde::Deserializer<'de> for MapDeserializer {
-    type Error = Error;
-
-    #[inline]
-    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        visitor.visit_map(self)
-    }
-
-    forward_to_deserialize_any! {
-        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
-        bytes byte_buf option unit unit_struct newtype_struct seq tuple
-        tuple_struct map struct enum identifier ignored_any
     }
 }
 
@@ -1044,7 +996,11 @@ impl<'de> VariantAccess<'de> for VariantRefDeserializer<'de> {
     {
         match self.value {
             Some(&Value::Array(ref v)) => {
-                serde::Deserializer::deserialize_any(SeqRefDeserializer::new(v), visitor)
+                if v.is_empty() {
+                    visitor.visit_unit()
+                } else {
+                    visit_array_ref(v, visitor)
+                }
             }
             Some(other) => Err(serde::de::Error::invalid_type(
                 other.unexpected(),
@@ -1066,9 +1022,7 @@ impl<'de> VariantAccess<'de> for VariantRefDeserializer<'de> {
         V: Visitor<'de>,
     {
         match self.value {
-            Some(&Value::Object(ref v)) => {
-                serde::Deserializer::deserialize_any(MapRefDeserializer::new(v), visitor)
-            }
+            Some(&Value::Object(ref v)) => visit_object_ref(v, visitor),
             Some(other) => Err(serde::de::Error::invalid_type(
                 other.unexpected(),
                 &"struct variant",
@@ -1088,38 +1042,6 @@ struct SeqRefDeserializer<'de> {
 impl<'de> SeqRefDeserializer<'de> {
     fn new(slice: &'de [Value]) -> Self {
         SeqRefDeserializer { iter: slice.iter() }
-    }
-}
-
-impl<'de> serde::Deserializer<'de> for SeqRefDeserializer<'de> {
-    type Error = Error;
-
-    #[inline]
-    fn deserialize_any<V>(mut self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        let len = self.iter.len();
-        if len == 0 {
-            visitor.visit_unit()
-        } else {
-            let ret = tri!(visitor.visit_seq(&mut self));
-            let remaining = self.iter.len();
-            if remaining == 0 {
-                Ok(ret)
-            } else {
-                Err(serde::de::Error::invalid_length(
-                    len,
-                    &"fewer elements in array",
-                ))
-            }
-        }
-    }
-
-    forward_to_deserialize_any! {
-        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
-        bytes byte_buf option unit unit_struct newtype_struct seq tuple
-        tuple_struct map struct enum identifier ignored_any
     }
 }
 
@@ -1192,24 +1114,6 @@ impl<'de> MapAccess<'de> for MapRefDeserializer<'de> {
             (lower, Some(upper)) if lower == upper => Some(upper),
             _ => None,
         }
-    }
-}
-
-impl<'de> serde::Deserializer<'de> for MapRefDeserializer<'de> {
-    type Error = Error;
-
-    #[inline]
-    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Error>
-    where
-        V: Visitor<'de>,
-    {
-        visitor.visit_map(self)
-    }
-
-    forward_to_deserialize_any! {
-        bool i8 i16 i32 i64 i128 u8 u16 u32 u64 u128 f32 f64 char str string
-        bytes byte_buf option unit unit_struct newtype_struct seq tuple
-        tuple_struct map struct enum identifier ignored_any
     }
 }
 
